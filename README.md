@@ -2,6 +2,8 @@
 
 A terminal UI for live shell command previewing. Type a command, see its output instantly.
 
+![demo](docs/demo.gif)
+
 ## Name
 
 **shui** = **sh**ell **ui** — also happens to be the Chinese word for water (水, shuǐ), evoking the fluid, flowing nature of the interface.
