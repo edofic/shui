@@ -1,6 +1,8 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -57,8 +59,10 @@ func (s Status) View() string {
 		style = StatusInfoStyle
 	}
 
-	// Truncate message if too long
-	msg := s.message
+	// Flatten to single line and truncate if too long
+	msg := strings.ReplaceAll(s.message, "\n", " ")
+	msg = strings.ReplaceAll(msg, "\r", "")
+	msg = strings.TrimSpace(msg)
 	maxLen := s.width - 4
 	if maxLen > 0 && len(msg) > maxLen {
 		msg = msg[:maxLen-3] + "..."
