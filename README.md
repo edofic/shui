@@ -26,10 +26,24 @@ cd shui
 go build -o shui .
 ```
 
+## Shell Integration
+
+Add to your shell config to enable command pre-population after exiting:
+
+```bash
+# ~/.zshrc
+eval "$(shui init zsh)"
+
+# ~/.bashrc
+eval "$(shui init bash)"
+```
+
+With shell integration, when you exit shui, the command you were editing will be placed on your command line ready to run or continue editing.
+
 ## Usage
 
 ```bash
-./shui
+shui
 ```
 
 Then start typing shell commands. The output panel updates automatically after you stop typing.
