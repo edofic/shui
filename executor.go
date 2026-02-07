@@ -12,12 +12,12 @@ import (
 const defaultTimeout = 30 * time.Second
 
 // Execute runs a shell command and returns a tea.Cmd that will produce a CommandResultMsg
-func Execute(command string) tea.Cmd {
-	return ExecuteWithTimeout(command, defaultTimeout)
+func Execute(command string, stdinData []byte) tea.Cmd {
+	return ExecuteWithTimeout(command, stdinData, defaultTimeout)
 }
 
 // ExecuteWithTimeout runs a shell command with a specified timeout
-func ExecuteWithTimeout(command string, timeout time.Duration) tea.Cmd {
+func ExecuteWithTimeout(command string, stdinData []byte, timeout time.Duration) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
@@ -27,6 +27,10 @@ func ExecuteWithTimeout(command string, timeout time.Duration) tea.Cmd {
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
+
+		if len(stdinData) > 0 {
+			cmd.Stdin = bytes.NewReader(stdinData)
+		}
 
 		err := cmd.Run()
 

@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"golang.org/x/term"
 )
 
 const zshInit = `shui() {
@@ -53,9 +55,35 @@ func main() {
 		}
 	}
 
+	// Check if stdin is a pipe (not a terminal)
+	var stdinData []byte
+	var opts []tea.ProgramOption
+
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		// Read piped input to feed to commands
+		var err error
+		stdinData, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading stdin: %v\n", err)
+			os.Exit(1)
+		}
+
+		// Open /dev/tty for interactive input
+		tty, err := os.Open("/dev/tty")
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening /dev/tty: %v\n", err)
+			os.Exit(1)
+		}
+		defer tty.Close()
+
+		opts = append(opts, tea.WithInput(tty))
+	}
+
+	opts = append(opts, tea.WithAltScreen())
+
 	p := tea.NewProgram(
-		New(),
-		tea.WithAltScreen(),
+		New(stdinData),
+		opts...,
 	)
 
 	m, err := p.Run()

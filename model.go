@@ -21,13 +21,15 @@ type Model struct {
 	width, height        int
 	ready                bool
 	frozen               bool
+	stdinData            []byte // piped input to feed to commands
 }
 
-func New() Model {
+func New(stdinData []byte) Model {
 	return Model{
-		editor: NewEditor(),
-		output: NewOutput(),
-		status: NewStatus(),
+		editor:    NewEditor(),
+		output:    NewOutput(),
+		status:    NewStatus(),
+		stdinData: stdinData,
 	}
 }
 
@@ -84,7 +86,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Command == currentCommand && currentCommand != "" && !m.executing && !m.frozen {
 			m.executing = true
 			m.status.SetInfo("Executing...")
-			return m, Execute(currentCommand)
+			return m, Execute(currentCommand, m.stdinData)
 		}
 		return m, nil
 
