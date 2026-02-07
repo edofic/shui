@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,14 +23,32 @@ type Model struct {
 	ready                bool
 	frozen               bool
 	stdinData            []byte // piped input to feed to commands
+	outputFile           string // file to write output to
+	inputMode            string // "", "output_file"
+	inputBuffer          string // buffer for input mode
 }
 
-func New(stdinData []byte) Model {
+func New(stdinData []byte, outputFile string) Model {
+	output := NewOutput()
+	status := NewStatus()
+	// Show stdin data initially if present
+	if len(stdinData) > 0 {
+		output.SetContent(string(stdinData))
+		// Write to output file if configured
+		if outputFile != "" {
+			if err := os.WriteFile(outputFile, stdinData, 0644); err != nil {
+				status.SetError(fmt.Sprintf("Failed to write: %s", err))
+			} else {
+				status.SetSuccess(fmt.Sprintf("Wrote to %s", outputFile))
+			}
+		}
+	}
 	return Model{
-		editor:    NewEditor(),
-		output:    NewOutput(),
-		status:    NewStatus(),
-		stdinData: stdinData,
+		editor:     NewEditor(),
+		output:     output,
+		status:     status,
+		stdinData:  stdinData,
+		outputFile: outputFile,
 	}
 }
 
@@ -42,6 +61,52 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Handle input mode (for setting output file)
+	if m.inputMode != "" {
+		switch msg := msg.(type) {
+		case tea.KeyMsg:
+			switch msg.String() {
+			case "enter":
+				if m.inputMode == "output_file" {
+					m.outputFile = m.inputBuffer
+					if m.outputFile != "" {
+						// If editor empty and we have stdin, write it now
+						if m.editor.Value() == "" && len(m.stdinData) > 0 {
+							if err := os.WriteFile(m.outputFile, m.stdinData, 0644); err != nil {
+								m.status.SetError(fmt.Sprintf("Failed to write: %s", err))
+							} else {
+								m.status.SetSuccess(fmt.Sprintf("Wrote to %s", m.outputFile))
+							}
+						} else {
+							m.status.SetInfo(fmt.Sprintf("Output file set: %s", m.outputFile))
+						}
+					} else {
+						m.status.SetInfo("Output file cleared")
+					}
+				}
+				m.inputMode = ""
+				m.inputBuffer = ""
+				return m, nil
+			case "esc":
+				m.inputMode = ""
+				m.inputBuffer = ""
+				m.status.SetInfo("Cancelled")
+				return m, nil
+			case "backspace":
+				if len(m.inputBuffer) > 0 {
+					m.inputBuffer = m.inputBuffer[:len(m.inputBuffer)-1]
+				}
+				return m, nil
+			default:
+				if len(msg.String()) == 1 {
+					m.inputBuffer += msg.String()
+				}
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -50,6 +115,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+d":
 			m.editor.Reset()
 			m.pendingCommand = ""
+			// Show stdin when editor is cleared and write to output
+			if len(m.stdinData) > 0 {
+				m.output.SetContent(string(m.stdinData))
+				m.output.GotoTop()
+				if m.outputFile != "" {
+					if err := os.WriteFile(m.outputFile, m.stdinData, 0644); err != nil {
+						m.status.SetError(fmt.Sprintf("Cleared, but failed to write: %s", err))
+						return m, nil
+					}
+					m.status.SetInfo(fmt.Sprintf("Editor cleared, wrote to %s", m.outputFile))
+					return m, nil
+				}
+			}
 			m.status.SetInfo("Editor cleared")
 			return m, nil
 		case "ctrl+l":
@@ -69,6 +147,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, m.startDebounce(cmd)
 				}
 			}
+			return m, nil
+		case "ctrl+o":
+			m.inputMode = "output_file"
+			m.inputBuffer = m.outputFile
 			return m, nil
 		}
 
@@ -97,7 +179,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lastCommand = m.editor.Value()
 			m.output.SetContent(msg.Output)
 			m.output.GotoTop()
-			m.status.SetSuccess(fmt.Sprintf("✓ Command succeeded"))
+			// Write to output file if configured
+			if m.outputFile != "" {
+				if err := os.WriteFile(m.outputFile, []byte(msg.Output), 0644); err != nil {
+					m.status.SetError(fmt.Sprintf("✓ Command succeeded but failed to write: %s", err))
+					return m, nil
+				}
+				m.status.SetSuccess(fmt.Sprintf("✓ Wrote to %s", m.outputFile))
+			} else {
+				m.status.SetSuccess("✓ Command succeeded")
+			}
 		} else {
 			// Keep previous successful output, show error in status
 			errMsg := msg.Stderr
@@ -164,11 +255,28 @@ func (m Model) View() string {
 		return "Initializing..."
 	}
 
+	// Show input prompt if in input mode
+	if m.inputMode == "output_file" {
+		prompt := fmt.Sprintf("Output file: %s█", m.inputBuffer)
+		help := HelpStyle.Render("enter: confirm • esc: cancel")
+		return lipgloss.JoinVertical(
+			lipgloss.Left,
+			m.editor.View(),
+			m.output.View(),
+			prompt,
+			help,
+		)
+	}
+
 	freezeStatus := ""
 	if m.frozen {
 		freezeStatus = " [❄ FROZEN]"
 	}
-	help := HelpStyle.Render("ctrl+c: quit • ctrl+d: clear editor • ctrl+l: clear output • ctrl+f: freeze/unfreeze • pgup/pgdn: scroll" + freezeStatus)
+	outputStatus := ""
+	if m.outputFile != "" {
+		outputStatus = fmt.Sprintf(" [-> %s]", m.outputFile)
+	}
+	help := HelpStyle.Render("^C: quit • ^D: clear • ^L: clear out • ^F: freeze • ^O: output file • pgup/dn: scroll" + freezeStatus + outputStatus)
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

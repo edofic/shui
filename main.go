@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io"
 	"os"
@@ -30,30 +31,28 @@ const bashInit = `shui() {
 `
 
 func main() {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
-		case "init":
-			if len(os.Args) < 3 {
-				fmt.Fprintln(os.Stderr, "Usage: shui init <shell>")
-				fmt.Fprintln(os.Stderr, "Supported shells: zsh, bash")
-				os.Exit(1)
-			}
-			switch os.Args[2] {
-			case "zsh":
-				fmt.Print(zshInit)
-			case "bash":
-				fmt.Print(bashInit)
-			default:
-				fmt.Fprintf(os.Stderr, "Unsupported shell: %s\n", os.Args[2])
-				fmt.Fprintln(os.Stderr, "Supported shells: zsh, bash")
-				os.Exit(1)
-			}
-			return
-		default:
-			fmt.Fprintf(os.Stderr, "Unknown command: %s\n", os.Args[1])
+	// Handle init subcommand before flag parsing
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		if len(os.Args) < 3 {
+			fmt.Fprintln(os.Stderr, "Usage: shui init <shell>")
+			fmt.Fprintln(os.Stderr, "Supported shells: zsh, bash")
 			os.Exit(1)
 		}
+		switch os.Args[2] {
+		case "zsh":
+			fmt.Print(zshInit)
+		case "bash":
+			fmt.Print(bashInit)
+		default:
+			fmt.Fprintf(os.Stderr, "Unsupported shell: %s\n", os.Args[2])
+			fmt.Fprintln(os.Stderr, "Supported shells: zsh, bash")
+			os.Exit(1)
+		}
+		return
 	}
+
+	outputFile := flag.String("o", "", "output file to write results to")
+	flag.Parse()
 
 	// Check if stdin is a pipe (not a terminal)
 	var stdinData []byte
@@ -82,7 +81,7 @@ func main() {
 	opts = append(opts, tea.WithAltScreen())
 
 	p := tea.NewProgram(
-		New(stdinData),
+		New(stdinData, *outputFile),
 		opts...,
 	)
 
