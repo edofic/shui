@@ -19,13 +19,13 @@ A terminal UI for live shell command previewing. Type a command, see its output 
 ## Installation
 
 ```bash
-go install github.com/yourusername/shui@latest
+go install github.com/edofic/shui@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/yourusername/shui
+git clone https://github.com/edofic/shui
 cd shui
 go build -o shui .
 ```

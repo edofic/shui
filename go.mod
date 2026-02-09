@@ -1,4 +1,4 @@
-module shui
+module github.com/edofic/shui
 
 go 1.25.5
 
